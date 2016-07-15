@@ -1,7 +1,8 @@
 # coding=utf-8
 
-import time
 import os
+import math
+import time
 
 
 # Transform the timestamp in form of 'yyyy-mm-dd HH:MM:SS' into int format.
@@ -36,3 +37,8 @@ def filename_in_dir(root_dir):
         for filename in filenames:
             temp_files.append(filename)
     return temp_dirs
+
+
+# Distance between two points(longitude, latitude)
+def distance_q_p(query, point):
+    return math.sqrt(pow(query[0] - point[0], 2) + pow(query[1] - point[1], 2))

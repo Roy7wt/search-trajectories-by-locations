@@ -7,6 +7,7 @@ from object import Record
 
 # Calculate the distance from a point to a line segment
 def point_line_distance(p, start, end):
+
     # If the start point is the same as the end point
     if start.longitude == end.longitude and start.latitude == end.latitude:
         return sqrt(pow(p.longitude - start.longitude, 2) + pow(p.latitude - start.latitude, 2))
