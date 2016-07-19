@@ -2,7 +2,7 @@
 # Assumption: the real distance between two points is equal to
 # the difference in Longitude and Latitude
 from math import radians, cos, sin, asin, sqrt
-from object import Record
+from object_def import Record
 
 
 # Calculate the distance from a point to a line segment

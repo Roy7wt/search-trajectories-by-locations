@@ -3,10 +3,9 @@
 
 
 class Record(object):
-    def __init__(self, longitude, latitude, velocity, obd_time):
+    def __init__(self, longitude, latitude, obd_time):
         self._longitude = longitude
         self._latitude = latitude
-        self._velocity = velocity
         self._obd_time = obd_time
 
     @property
@@ -16,10 +15,6 @@ class Record(object):
     @property
     def latitude(self):
         return self._latitude
-
-    @property
-    def velocity(self):
-        return self._velocity
 
     @property
     def obd_time(self):

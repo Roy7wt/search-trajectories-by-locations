@@ -1,13 +1,10 @@
 # coding=utf-8
-import os
 import sys
-import math
 from rtree import index
 from functions import *
 
 
-# Algorithm 1:
-def iknn(query_points, time_limit, k_threshold):
+def iknn(query_points, date_month, date_day, k_threshold):
     # Variables in dissertation
     candidate_set_c = []
     lambda_threshold = k_threshold
@@ -21,14 +18,13 @@ def iknn(query_points, time_limit, k_threshold):
 
     round_count = 0
     while True:
-
         key_count = 0
         for point in query_points:
 
             # line 7-8
-            lambda_i_points, candidate_i = knn(point, time_limit, lambda_threshold=lambda_threshold)
+            lambda_i_points, candidate_i = knn(point, date_month, date_day, lambda_threshold=lambda_threshold)
 
-            list_candidates[key_count] = candidate_i  # FIXME:这个地方的轨迹可能会比较少 需要在knn里面改进一下? 不然有些轨迹找不到
+            list_candidates[key_count] = candidate_i
             list_lambda_points[key_count] = lambda_i_points
             key_count += 1
 
@@ -36,7 +32,6 @@ def iknn(query_points, time_limit, k_threshold):
             for trajectory in candidate_i:
                 candidate_set_c.append(trajectory)
 
-        print len(candidate_set_c)
         if len(candidate_set_c) > k_threshold:
             candidate_set_c = {}.fromkeys(candidate_set_c).keys()
 
@@ -44,79 +39,57 @@ def iknn(query_points, time_limit, k_threshold):
             for trajectory in candidate_set_c:
                 LB[trajectory] = compute_lb(trajectory, query_points, list_candidates, list_lambda_points)
 
-            # k-LB[] = LB[].topK() and store trajectories
+            # sort top k and store trajectories
             k_LB = list(sorted(LB, key=LB.__getitem__, reverse=True))[0:k_threshold]
 
             # Compute UB_{n}
             UB_n = compute_ubn(query_points, list_lambda_points)
 
             # TODO 测试一下相似度
-            print 'sim', sim(query_points, 'data/user/P006000300000006/2014-07-22 r35.txt')
+            # print 'sim', sim(query_points, 'data/user/P006000300000006/2014-07-22 r35.txt')
+
             if LB[k_LB[-1]] > UB_n:
                 # compute UB for each candidate in C and sort candidate in C by UB in descending order
                 return refine(candidate_set_c, query_points, list_candidates, list_lambda_points, k_threshold)
+
+        # Increase λ by delta and go to the next round
         round_count += 1
         lambda_threshold += k_threshold * pow(2, round_count)
 
 
 # Return λ-NN(q) & λ.top trajectories scanned by λ-NN(q)
 # 根据查询点,返回λ-NN(q)和所有被扫描过的 λ.top() 条轨迹
-def knn(point, time_limit, lambda_threshold=10):
+def knn(point, date_month, date_day, lambda_threshold=10):
     # Initialize some variables
     idx = index.Index()
 
     query_longitude, query_latitude = point[0], point[1];
-    users_directories = all_users_directories()
+    trajectories = trajectories_of_date(date_month, date_day)
 
     # for-loop
-    rtree_id_user = 0
-    for directory in users_directories:
-        user_trajectories = trajectories_of_user(directory_name=directory, time_limit=time_limit,
-                                                 prefix_path='data/user/')
-        rtree_id_trajectory = 0
-        for trajectory in user_trajectories:
-            with open('data/user/' + directory + '/' + trajectory, 'r') as f:
-                for line in f:
-                    temp = line.strip('\n').split('\t')
-                    longitude, latitude, obd_time = float(temp[0]), float(temp[1]), temp[3]
-
-                    # Construct the id of rtree
-                    rtree_id = rtree_id_user * pow(10, 12) + rtree_id_trajectory * pow(10, 11) + time_transform_to_int(
-                        obd_time)
-                    idx.insert(rtree_id, (longitude, latitude))
-            rtree_id_trajectory += 1
-        rtree_id_user += 1
+    loop_count = 0
+    for trajectory in trajectories:
+        with open('%s/2014-%02d/%02d/%s' % ('data', date_month, date_day, trajectory), 'r') as f:
+            for line in f:
+                temp = line.strip('\n').split('\t')
+                longitude, latitude, obd_time = float(temp[0]), float(temp[1]), int(temp[2])
+                rtree_id = loop_count * pow(10, 11) + obd_time
+                idx.insert(rtree_id, (longitude, latitude))
+        loop_count += 1
 
     # λ-NN(q_i) = {q^1_i, q^2_i, ... q^λ_i}
     lambda_nn = []
-    # Format: {user: {trajectory: [time1, time2,...]}}
-    record_dict = {}
 
-    # Query with λ-nearest
     lambda_nearest = idx.nearest((query_longitude, query_latitude), lambda_threshold, objects=True)
-    for item in lambda_nearest:
-
-        lambda_nn.append([item.bbox[0], item.bbox[1]])
-        user, trajectory, obd_time = item.id / pow(10, 12), item.id / pow(10, 11) % 10, item.id % pow(10, 11)
-
-        if user not in record_dict:
-            record_dict.setdefault(user, {})
-
-        if trajectory not in record_dict[user]:
-            record_dict[user].setdefault(trajectory, [])
-        record_dict[user][trajectory].append(obd_time)
-
-    # Trajectories scanned by λ-NN(q_i)
     scanned_trajectories = []
-    for (user, v) in record_dict.iteritems():
-        user = users_directories[user]
+    for item in lambda_nearest:
+        lambda_nn.append([item.bbox[0], item.bbox[1]])
+        file_index = item.id / pow(10, 11)  # get the position of file under the directory
 
-        trajectories = trajectories_of_user(directory_name=user, time_limit=time_limit, prefix_path='data/user/')
-        for (trajectory, obd_time) in v.iteritems():
-            scanned_trajectories.append('data/user/' + user + '/' + trajectories[trajectory])
+        # the trajectory with specific date format of 2014-mm/dd
+        scanned_trajectories.append('data/2014-%02d/%02d/%s' % (date_month, date_day, trajectories[file_index]))
 
-    # Remove redundant trajectories
-    return lambda_nn, {}.fromkeys(scanned_trajectories).keys()
+    return lambda_nn, scanned_trajectories
 
 
 # Compute similarity Sim(Q,R) between Q and R
@@ -133,7 +106,7 @@ def sim(query_points, trajectory):
 
         temp_min = sys.float_info.max
         for point_j in points_in_trajectory:
-            temp_min = min(temp_min,  distance_q_p(query_point, point_j))
+            temp_min = min(temp_min, distance_q_p(query_point, point_j))
         ret_sum += pow(math.e, (-1) * temp_min)
 
     return ret_sum
@@ -234,36 +207,25 @@ def all_users_directories(directory='data/user'):
 # 返回某一用户在规定时间 (默认是空值) 下的所有路径
 def trajectories_of_user(directory_name, time_limit='', prefix_path='data/user/'):
     res = []
+
+    flag = False
     for parent, dirnames, filenames in os.walk(prefix_path + directory_name):
         for item in filenames:
             if time_limit in item:
+                flag = True
                 res.append(item)
+
+            if time_limit not in item and flag:
+                break
     return res
 
 
-'''
----------------------------------------------
-                    Sub
----------------------------------------------
-'''
+# Return all the trajectory of a specific date
+def trajectories_of_date(date_month, date_day, prefix_path='data/'):
+    # directory : data/2014-mm/dd/
+    return filename_in_dir('%s/2014-%02d/%02d' % (prefix_path, date_month, date_day))
 
 
-def res(filename):
-    # with open('test/templl.txt', 'r') as fr, open('test/res.txt', 'w') as fw:
-    #     for line in fr:
-    #         temp = line.strip('\n').split('\t')
-    #         fw.write('[%s,%s],\n' % (temp[0], temp[1]))
+qps = [[121.401576, 31.261853], [121.5032, 31.297063], [121.717433, 31.398219], [121.797771, 31.503072]]
+print iknn(query_points=qps, date_month=7, date_day=19, k_threshold=15)
 
-    with open(filename, 'r') as fr, open('test/res.txt', 'w') as fw:
-        for line in fr:
-            temp = line.strip('\n').split('\t')
-            fw.write('[%s,%s],\n' % (temp[0], temp[1]))
-
-
-qps = [[121.308538, 31.278788], [121.527922, 31.382309], [121.630575, 31.336281]]
-print iknn(query_points=qps, time_limit='2014-07-22', k_threshold=15)
-# query_point = [121.424815, 31.041945]
-# print knn(query_point, time_limit='2014-07-02', lambda_threshold=10)
-# print len(str(time_transform_to_int('2014-07-04 23:09:20')))
-# print time_transform_to_int('2014-07-04 23:09:20')
-# print pow(10, 10)

@@ -25,17 +25,21 @@ def time_difference(ts_latter, ts_former):
     return time_transform_to_int(ts_latter) - time_transform_to_int(ts_former)
 
 
-# All the trajectories of all the users
+# All the files under the root dir
 def filename_in_dir(root_dir):
-    temp_dirs = []
     temp_files = []
+    for parent, dirnames, filenames in os.walk(root_dir):
+        for filename in filenames:
+            temp_files.append(filename)
+    return temp_files
 
+
+# All the directory under the root dir
+def dirname_in_dir(root_dir):
+    temp_dirs = []
     for parent, dirnames, filenames in os.walk(root_dir):
         for dirname in dirnames:
             temp_dirs.append(dirname)
-
-        for filename in filenames:
-            temp_files.append(filename)
     return temp_dirs
 
 
